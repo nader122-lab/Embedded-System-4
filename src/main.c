@@ -2,23 +2,19 @@
 /*----------------------------------------------------------------------------
     Given code for Embedded Systems Lab 5 
     
-    Poll the accelerometer and print x, y, and z axis values to to terminal
+    Poll the accelerometer and print x, y, and z axis values to the terminal
 
-    There is one threads
+    There is one thread
        t_accel: polls the accelerometer every 2 seconds.
     
  *---------------------------------------------------------------------------*/
  
 #include "cmsis_os2.h"
-//#include "string.h"
-
 #include <MKL25Z4.h>
 #include <stdbool.h>
 #include "serialPort.h"
 #include "i2c.h"
 #include "accel.h"
-
-
 
 /*--------------------------------------------------------------
  *   Thread t_accel
