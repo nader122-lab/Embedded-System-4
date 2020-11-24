@@ -12,6 +12,7 @@
 #include "cmsis_os2.h"
 #include <MKL25Z4.h>
 #include <stdbool.h>
+#include "gpio.h"
 #include "serialPort.h"
 #include "i2c.h"
 #include "accel.h"
@@ -19,6 +20,8 @@
 /*--------------------------------------------------------------
  *   Thread t_accel
  *      Read accelarations periodically  
+ *      Write results to terminal
+ *      Toggle green LED on each poll
  *--------------------------------------------------------------*/
 osThreadId_t t_accel;      /* id of thread to poll accelerometer */
 
@@ -54,6 +57,10 @@ void accelThread(void *arg) {
     int16_t xyz[3] ; // array of values from accelerometer
         // signed integers in range +8191 (+2g) to -8192 (-2g)
     
+    // initialise green LED
+    greenLEDOnOff(LED_ON) ;
+    int state = LED_ON ;
+    
     // initialise accelerometer
     int aOk = initAccel() ;
     if (aOk) {
@@ -73,7 +80,19 @@ void accelThread(void *arg) {
         
         // write Z scaled integer
         aToString((xyz[2] * 100) / 4096, &xyzStr[18]) ;
-        sendMsg(xyzStr, CRLF) ;        
+        sendMsg(xyzStr, CRLF) ;  
+
+        // toggle green LED
+        switch (state) {
+            case LED_ON:
+                state = LED_OFF ;
+                greenLEDOnOff(LED_OFF) ;
+                break ;
+            case LED_OFF:
+                state = LED_ON ;
+                greenLEDOnOff(LED_ON) ;
+                break ;                
+        }            
     }
 }
     
@@ -102,6 +121,9 @@ int main (void) {
 
     // Initialise I2C0 for accelerometer 
     i2c_init() ;
+    
+    // Initialise GPIo for on-board LEDs
+    configureGPIOoutput() ;
     
     // Create threads
     t_accel = osThreadNew(accelThread, NULL, NULL); 
