@@ -15,8 +15,17 @@
 #define BLUE_LED_POS (1)	// on port D
 
 // LED states
-#define LED_ON  (1)
+#define INTERMEDIATE  (0)
+#define FLAT (1)
+#define RIGHT (2)
+#define LEFT (3)
+#define DOWN (4) 
+#define UP (5)
+#define OVER (6)
+#define LED_ON (1)
 #define LED_OFF (0)
+#define RESET_EVT (1)
+
 
 // Function prototypes
 void configureGPIOoutput(void) ;
