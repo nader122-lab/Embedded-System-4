@@ -19,4 +19,5 @@ The project includes code for the accelerometer. This API has two functions:
 
 The lab requirements include an implementation of the following state transition diagram:
 
+![state transition models of the tasks in lab 2](stm.png)
 
