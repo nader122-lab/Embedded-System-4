@@ -1,12 +1,4 @@
-/*----------------------------------------------------------------------------
-    Given code for Embedded Systems Lab 5 
-    
-    Poll the accelerometer and print x, y, and z axis values to the terminal
 
-    There is one thread
-       t_accel: polls the accelerometer every 2 seconds.
-    
- *---------------------------------------------------------------------------*/
 
 #include "cmsis_os2.h"
 
@@ -28,8 +20,8 @@
  *      Write results to terminal
  *      Toggle green LED on each poll
  *--------------------------------------------------------------*/
-osThreadId_t t_accel, t_green; /* id of thread to poll accelerometer */
-osMessageQueueId_t controlIQ;
+osThreadId_t t_accel, t_green; /* id of thread to poll accelerometer and light the green LED */
+osMessageQueueId_t controlIQ; // id for message queue 
 // convert signed integer +/- 999 to +/-X.XX
 //   SX.XX
 //   01234
@@ -47,12 +39,9 @@ enum controlMsg_t {
 
 void accelThread(void * arg) {
   enum controlMsg_t msg;
-  int16_t xyz[3]; // array of values from accelerometer
-  // signed integers in range +8191 (+2g) to -8192 (-2g)
-  int x, y, z;
-  // initialise green LED
-//  greenLEDOnOff(LED_ON);
-  int state = LED_ON;
+  int16_t xyz[3]; // array of values from accelerometer, signed integers in range +8191 (+2g) to -8192 (-2g)
+  int x, y, z; 
+  int state = INTERMEDIATE; // initial state
 
   // initialise accelerometer
   int aOk = initAccel();
@@ -62,51 +51,51 @@ void accelThread(void * arg) {
     sendMsg("Accel init failed", CRLF);
   }
   while (1) {
-    osDelay(200);
+    osDelay(150); // accelerometer polling delay
     readXYZ(xyz); // read X, Y Z values
-    x = (xyz[0] * 100) / 4096;
-    y = (xyz[1] * 100) / 4096;
-    z = (xyz[2] * 100) / 4096;
+    x = (xyz[0] * 100) / 4096; // holds acceleration value in the X axis
+    y = (xyz[1] * 100) / 4096; // holds acceleration value in the Y axis
+    z = (xyz[2] * 100) / 4096; // holds acceleration value in the Z axis 
 
-    switch (state) {
+    switch (state) { // determines the orientation of the development board
     case INTERMEDIATE:
-      if (z > 90) {
-        sendMsg("FLAT", CRLF) ;
+      if (z > 90) { 
+        sendMsg("FLAT", CRLF);
         state = FLAT;
         msg = flat;
-        osMessageQueuePut(controlIQ, & msg, 0, NULL);
+        osMessageQueuePut(controlIQ, & msg, 0, NULL); // send message if flat
       } else if (y < -90) {
-        sendMsg("RIGHT", CRLF) ;
+        sendMsg("RIGHT", CRLF);
         state = RIGHT;
         msg = right;
-        osMessageQueuePut(controlIQ, & msg, 0, NULL);
+        osMessageQueuePut(controlIQ, & msg, 0, NULL); // send message if right
       } else if (y > 90) {
-        sendMsg("LEFT", CRLF) ;
+        sendMsg("LEFT", CRLF);
         state = LEFT;
         msg = error;
-        osMessageQueuePut(controlIQ, & msg, 0, NULL);
+        osMessageQueuePut(controlIQ, & msg, 0, NULL); // send message if left
       } else if (x > 90) {
-        sendMsg("DOWN", CRLF) ;
+        sendMsg("DOWN", CRLF);
         state = DOWN;
         msg = error;
-        osMessageQueuePut(controlIQ, & msg, 0, NULL);
+        osMessageQueuePut(controlIQ, & msg, 0, NULL); // send message if down
       } else if (x < -90) {
-        sendMsg("UP", CRLF) ;
+        sendMsg("UP", CRLF);
         state = UP;
         msg = up;
-        osMessageQueuePut(controlIQ, & msg, 0, NULL);
+        osMessageQueuePut(controlIQ, & msg, 0, NULL); // send message if up
       } else if (z < -90) {
-        sendMsg("OVER", CRLF) ;
+        sendMsg("OVER", CRLF);
         state = OVER;
         msg = error;
-        osMessageQueuePut(controlIQ, & msg, 0, NULL);
+        osMessageQueuePut(controlIQ, & msg, 0, NULL); // send message if over
       } else {}
 
       break;
 
     case FLAT:
       if (z < 80) {
-        state = INTERMEDIATE;        
+        state = INTERMEDIATE;
       }
       break;
 
@@ -144,6 +133,7 @@ void accelThread(void * arg) {
   }
 }
 
+// states
 #define FIRST (1)
 #define SECOND (2)
 #define THIRD (3)
@@ -153,105 +143,96 @@ void accelThread(void * arg) {
 void greenThread(void * arg) {
   int greenState = FIRST;
   enum controlMsg_t msg;
-  osStatus_t status;
+  osStatus_t status; // returned by Message Queue Get
   uint32_t counter;
-  uint32_t timer = osWaitForever;
+  uint32_t timer = osWaitForever; // initialises MessageQueueGet wait time
   while (1) {
-      counter = osKernelGetTickCount();
-      status = osMessageQueueGet(controlIQ, & msg, NULL, timer);
-      if (status == osOK) {
-        
-        if (msg == error) {
-          greenState = ERROR;
-        }
-        counter = osKernelGetTickCount() - counter;
+    counter = osKernelGetTickCount(); // current value of Kernal count
+    status = osMessageQueueGet(controlIQ, & msg, NULL, timer); // waits for message from queue
+    if (status == osOK) { // message received 
 
-        switch (greenState) {
-
-        case FIRST:
-          if (msg == flat) {
-            greenState = SECOND;
-            timer = osWaitForever;
-          } else {
-            redLEDOnOff(LED_ON);
-            greenState = ERROR;
-          }
-          break;
-
-        case SECOND:
-          if (counter > 10000) {
-            if (msg == right) { 
-            greenState = THIRD;
-            timer = 6000;
-            }
-            else {
-            redLEDOnOff(LED_ON);
-            greenState = ERROR;
-            }             
-          } 
-        else {
-            redLEDOnOff(LED_ON);
-            greenState = ERROR;
-          }
-          break;
-
-        case THIRD:
-          if (counter < 2000) {
-           redLEDOnOff(LED_ON);
-           greenState = ERROR;
-          } else {
-            
-           if (msg == up) {
-              greenState = FOURTH;
-              timer = 8000;
-            } 
-           else {
-              redLEDOnOff(LED_ON);
-              greenState = ERROR;
-            }
-           }
-          break;
-
-          
-        case FOURTH:
-          if (counter < 4000) {
-            redLEDOnOff(LED_ON);
-            greenState = ERROR;
-          } else {            
-            if (msg == flat) {
-              timer = osWaitForever;
-              greenState = GREENON;
-              greenLEDOnOff(LED_ON);
-            } else {
-              redLEDOnOff(LED_ON);
-              greenState = ERROR;
-            }
-          }
-
-          break;
-
-        case GREENON:
-          greenLEDOnOff(LED_ON);
-          osDelay(osWaitForever);
-          break;
-
-        case ERROR:
-          redLEDOnOff(LED_ON);
-          break;
-
-        }
-
-      } else if (status == osErrorTimeout) {
-        redLEDOnOff(LED_ON);
+      if (msg == error) { // wrong message received
         greenState = ERROR;
       }
+      counter = osKernelGetTickCount() - counter; // determines time passed before message received
 
+      switch (greenState) {
 
+      case FIRST:
+        if (msg == flat) {
+          greenState = SECOND;   // next state
+          timer = osWaitForever; // new timer value
+        } else {                 // error occured   
+          redLEDOnOff(LED_ON);   // turn red LED on
+          greenState = ERROR;    // next state
+        }
+        break;
+
+      case SECOND:
+        if (counter > 10000) {
+          if (msg == right) {
+            greenState = THIRD;  // next state
+            timer = 6000;        // new timer value
+          } else {               // error occured
+            redLEDOnOff(LED_ON); // turn red LED on
+            greenState = ERROR;  // next state
+          }
+        } else {                 // error occured
+          redLEDOnOff(LED_ON);   // turn red LED on 
+          greenState = ERROR;    // next state 
+        }
+        break;
+
+      case THIRD:
+        if (counter < 2000) {    // error occured
+          redLEDOnOff(LED_ON);   // turn red LED on
+          greenState = ERROR;    // next state
+        } else {                 // counter value correct
+          if (msg == up) {       // message correct
+            greenState = FOURTH; // next state
+            timer = 8000;        // new timer value
+          } else {               // error occured
+            redLEDOnOff(LED_ON); // turn red LED on
+            greenState = ERROR;  // next state
+          }
+        }
+        break;
+
+      case FOURTH:
+        if (counter < 4000) {      // error occured
+          redLEDOnOff(LED_ON);     // turn red LED on 
+          greenState = ERROR;      // next state
+        } else {                   // counter value correct 
+          if (msg == flat) {       // message correct
+            timer = osWaitForever; // new timer value
+            greenState = GREENON;  // next state
+            greenLEDOnOff(LED_ON); // turn green 
+          } else {                 // error occured 
+            redLEDOnOff(LED_ON);   // turn red LED on
+            greenState = ERROR;    // next state
+          }
+        }
+
+        break;
+
+      case GREENON:
+        osDelay(osWaitForever);            // stay in this state forever 
+        break;
+
+      case ERROR:
+        osDelay(osWaitForever);            // stay in this state forever
+        break;
+
+      }
+
+    } else if (status == osErrorTimeout) { // timer finished
+      redLEDOnOff(LED_ON);                 // turn red lED on
+      greenState = ERROR;                  // next state
     }
 
   }
 
-
+}
 
 /*----------------------------------------------------------------------------
  * Application main
@@ -282,7 +263,7 @@ int main(void) {
   configureGPIOoutput();
 
   // Create message queue flags
- controlIQ = osMessageQueueNew(2, sizeof(enum controlMsg_t), NULL) ;
+  controlIQ = osMessageQueueNew(2, sizeof(enum controlMsg_t), NULL);
   // Create threads
   t_accel = osThreadNew(accelThread, NULL, NULL);
   t_green = osThreadNew(greenThread, NULL, NULL);
